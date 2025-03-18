@@ -1,2 +1,4 @@
 # CSV files
 *.csv
+
+venv

@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Weightlifting Predictor</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        .prediction-result {
+            font-size: 1.2em;
+            font-weight: bold;
+            margin: 20px 0;
+        }
+        .stats-card {
+            margin-bottom: 20px;
+        }
+        .feature-importance {
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container py-5">
+        <!-- Description Section -->
+        <div class="row mb-5">
+            <div class="col-12">
+                <h1 class="mb-4">Weightlifting Predictor Calculator</h1>
+                <p class="lead">
+                    This calculator uses machine learning to predict your Clean & Jerk or Snatch performance based on your characteristics and known lifts.
+                </p>
+            </div>
+        </div>
+
+        <!-- Stats Section -->
+        <div class="row mb-5" id="statsSection">
+            <div class="col-md-6">
+                <div class="card stats-card">
+                    <div class="card-header">
+                        <h3>Clean & Jerk Model Statistics</h3>
+                    </div>
+                    <div class="card-body" id="cleanJerkStats">
+                        Loading statistics...
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="card stats-card">
+                    <div class="card-header">
+                        <h3>Snatch Model Statistics</h3>
+                    </div>
+                    <div class="card-body" id="snatchStats">
+                        Loading statistics...
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Prediction Form -->
+        <div class="row">
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header">
+                        <h3>Make a Prediction</h3>
+                    </div>
+                    <div class="card-body">
+                        <form id="predictionForm">
+                            <div class="mb-3">
+                                <label for="bodyweight" class="form-label">Bodyweight (kg)</label>
+                                <input type="number" class="form-control" id="bodyweight" required step="0.1">
+                            </div>
+                            <div class="mb-3">
+                                <label for="age" class="form-label">Age (years)</label>
+                                <input type="number" class="form-control" id="age" required step="0.1">
+                            </div>
+                            <div class="mb-3">
+                                <label for="sex" class="form-label">Sex</label>
+                                <select class="form-control" id="sex" required>
+                                    <option value="m">Male</option>
+                                    <option value="f">Female</option>
+                                </select>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">What would you like to predict?</label>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="radio" name="predictType" id="predictSnatch" value="snatch">
+                                    <label class="form-check-label" for="predictSnatch">
+                                        Predict Snatch
+                                    </label>
+                                </div>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="radio" name="predictType" id="predictCleanJerk" value="clean_jerk">
+                                    <label class="form-check-label" for="predictCleanJerk">
+                                        Predict Clean & Jerk
+                                    </label>
+                                </div>
+                            </div>
+                            <div class="mb-3" id="snatchInput" style="display: none;">
+                                <label for="snatch" class="form-label">Snatch (kg)</label>
+                                <input type="number" class="form-control" id="snatch" step="0.1">
+                            </div>
+                            <div class="mb-3" id="cleanJerkInput" style="display: none;">
+                                <label for="cleanJerk" class="form-label">Clean & Jerk (kg)</label>
+                                <input type="number" class="form-control" id="cleanJerk" step="0.1">
+                            </div>
+                            <button type="submit" class="btn btn-primary">Predict</button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="card" id="resultCard" style="display: none;">
+                    <div class="card-header">
+                        <h3>Prediction Results</h3>
+                    </div>
+                    <div class="card-body">
+                        <div id="predictionResult"></div>
+                        <div id="predictionInterval"></div>
+                        <div id="modelAccuracy"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Load model statistics when page loads
+        document.addEventListener('DOMContentLoaded', async () => {
+            try {
+                const response = await fetch('/stats');
+                const data = await response.json();
+                
+                // Update stats sections
+                updateModelStats('cleanJerkStats', data.model_statistics.clean_jerk, 'Clean & Jerk');
+                updateModelStats('snatchStats', data.model_statistics.snatch, 'Snatch');
+            } catch (error) {
+                console.error('Error loading stats:', error);
+            }
+        });
+
+        function updateModelStats(elementId, stats, modelName) {
+            const element = document.getElementById(elementId);
+            element.innerHTML = `
+                <p><strong>Model Accuracy (R²):</strong> ${(stats.r2_score * 100).toFixed(1)}%</p>
+                <p><strong>Average Error (RMSE):</strong> ${stats.rmse.toFixed(1)} kg</p>
+                <p><strong>Sample Size:</strong> ${stats.sample_size} lifters</p>
+                <div class="feature-importance">
+                    <strong>Feature Importance:</strong>
+                    <ul>
+                        ${Object.entries(stats.feature_importance)
+                            .sort((a, b) => b[1] - a[1])
+                            .map(([feature, importance]) => `
+                                <li>${feature}: ${(importance * 100).toFixed(1)}%</li>
+                            `).join('')}
+                    </ul>
+                </div>
+            `;
+        }
+
+        // Show/hide appropriate input fields based on prediction type
+        document.querySelectorAll('input[name="predictType"]').forEach(radio => {
+            radio.addEventListener('change', (e) => {
+                document.getElementById('snatchInput').style.display = 
+                    e.target.value === 'clean_jerk' ? 'block' : 'none';
+                document.getElementById('cleanJerkInput').style.display = 
+                    e.target.value === 'snatch' ? 'block' : 'none';
+            });
+        });
+
+        // Handle form submission
+        document.getElementById('predictionForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            // Check if prediction type is selected
+            const predictType = document.querySelector('input[name="predictType"]:checked');
+            if (!predictType) {
+                alert('Please select what you want to predict (Snatch or Clean & Jerk)');
+                return;
+            }
+
+            const data = {
+                bodyweight: parseFloat(document.getElementById('bodyweight').value),
+                age: parseFloat(document.getElementById('age').value),
+                sex: document.getElementById('sex').value
+            };
+
+            // Validate required fields
+            if (!data.bodyweight || !data.age || !data.sex) {
+                alert('Please fill in all required fields (bodyweight, age, and sex)');
+                return;
+            }
+
+            if (predictType.value === 'clean_jerk') {
+                const snatchValue = document.getElementById('snatch').value;
+                if (!snatchValue) {
+                    alert('Please enter a snatch value');
+                    return;
+                }
+                data.snatch = parseFloat(snatchValue);
+            } else {
+                const cleanJerkValue = document.getElementById('cleanJerk').value;
+                if (!cleanJerkValue) {
+                    alert('Please enter a clean & jerk value');
+                    return;
+                }
+                data.clean_jerk = parseFloat(cleanJerkValue);
+            }
+
+            try {
+                const response = await fetch('/predict', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(data)
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.error || 'Failed to make prediction');
+                }
+
+                const result = await response.json();
+                
+                // Show result card
+                document.getElementById('resultCard').style.display = 'block';
+                
+                // Update prediction results
+                const predictedValue = predictType.value === 'clean_jerk' 
+                    ? result.predictions.clean_jerk 
+                    : result.predictions.snatch;
+                
+                const stats = result.prediction_statistics[predictType.value];
+                
+                document.getElementById('predictionResult').innerHTML = `
+                    <h4>Predicted ${predictType.value === 'clean_jerk' ? 'Clean & Jerk' : 'Snatch'}</h4>
+                    <p class="prediction-result">${predictedValue.toFixed(1)} kg</p>
+                `;
+
+                document.getElementById('predictionInterval').innerHTML = `
+                    <p><strong>95% Prediction Interval:</strong><br>
+                    ${stats.prediction_interval.lower_bound.toFixed(1)} kg to ${stats.prediction_interval.upper_bound.toFixed(1)} kg</p>
+                `;
+
+                document.getElementById('modelAccuracy').innerHTML = `
+                    <p><strong>Model Accuracy:</strong><br>
+                    R² Score: ${(stats.model_accuracy.r2_score * 100).toFixed(1)}%<br>
+                    RMSE: ${stats.model_accuracy.rmse.toFixed(1)} kg</p>
+                `;
+
+            } catch (error) {
+                console.error('Error making prediction:', error);
+                alert(error.message || 'Error making prediction. Please try again.');
+            }
+        });
+    </script>
+</body>
+</html> 
